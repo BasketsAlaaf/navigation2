@@ -31,6 +31,7 @@ add_subdirectory(src/pf)
 add_subdirectory(src/map)
 add_subdirectory(src/motion_model)
 add_subdirectory(src/sensors)
+add_subdirectory(src/localization_quality_monitor)
 
 set(executable_name amcl)
 
@@ -80,7 +81,7 @@ ament_target_dependencies(${library_name}
 )
 
 target_link_libraries(${library_name}
-  map_lib pf_lib sensors_lib
+  map_lib pf_lib sensors_lib localization_quality_monitor_lib
 )
 
 rclcpp_components_register_nodes(${library_name} "nav2_amcl::AmclNode")
@@ -108,7 +109,7 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(${library_name} pf_lib sensors_lib motions_lib map_lib)
+ament_export_libraries(${library_name} pf_lib sensors_lib motions_lib map_lib localization_quality_monitor_lib)
 ament_export_dependencies(${dependencies})
 pluginlib_export_plugin_description_file(nav2_amcl plugins.xml)
 ament_package()
