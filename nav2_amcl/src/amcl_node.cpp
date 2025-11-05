@@ -281,10 +281,10 @@ AmclNode::on_configure(const rclcpp_lifecycle::State & /*state*/)
   executor_->add_callback_group(callback_group_, get_node_base_interface());
   executor_thread_ = std::make_unique<nav2_util::NodeThread>(executor_);
 
-  localization_quality_state_machine_ = std::make_unique<LocalizationQualityStateMachine>(
+  if (enable_localization_monitor_){
+    localization_quality_state_machine_ = std::make_unique<LocalizationQualityStateMachine>(
     low_strict_threshold_, low_soft_threshold_, high_strict_threshold_, high_soft_threshold_, delay_in_sec_);
-//  localization_monitor_ = std::make_unique<LocalizationMonitor>(map_, max_beams_);
-
+  }
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -1013,10 +1013,13 @@ AmclNode::publishAmclPose(
     last_published_pose_ = *p;
     first_pose_sent_ = true;
     pose_pub_->publish(std::move(p));
-    pf_vector_t laser_pose = lasers_[laser_index]->GetLaserPose();
-    double likelihood_score = localization_monitor_->computeScore(hyps[max_weight_hyp].pf_pose_mean, laser_scan, laser_pose);
-    std::string state = localization_quality_state_machine_->update(likelihood_score);
-    RCLCPP_INFO(this->get_logger(), "Current state: %s, average weight: %.5f", state.c_str(), likelihood_score);
+    if (enable_localization_monitor_ && localization_monitor_){
+        pf_vector_t laser_pose = lasers_[laser_index]->GetLaserPose();
+        double likelihood_score = localization_monitor_->computeScore(hyps[max_weight_hyp].pf_pose_mean,
+                                                                      laser_scan, laser_pose);
+        std::string state = localization_quality_state_machine_->update(likelihood_score);
+        RCLCPP_INFO(this->get_logger(), "Current state: %s, average weight: %.5f", state.c_str(), likelihood_score);
+    }
   } else {
     RCLCPP_WARN(
       get_logger(), "AMCL covariance or pose is NaN, likely due to an invalid "
@@ -1453,7 +1456,10 @@ AmclNode::mapReceived(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   }
   handleMapMessage(*msg);
   first_map_received_ = true;
-  localization_monitor_ = std::make_unique<LocalizationMonitor>(map_, max_beams_);
+  if (enable_localization_monitor_){
+    localization_monitor_.reset();
+    localization_monitor_ = std::make_unique<LocalizationQualityMonitor>(map_, max_beams_);
+  }
 }
 
 void

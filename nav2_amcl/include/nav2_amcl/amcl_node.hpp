@@ -31,8 +31,8 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "message_filters/subscriber.h"
 #include "nav2_util/lifecycle_node.hpp"
+#include "nav2_amcl/localization_quality_monitor/localization_quality_monitor.hpp"
 #include "nav2_amcl/localization_quality_monitor/localization_quality_state_machine.hpp"
-#include "nav2_amcl/localization_quality_monitor/localization_monitor.hpp"
 #include "nav2_amcl/motion_model/motion_model.hpp"
 #include "nav2_amcl/sensors/laser/laser.hpp"
 #include "nav2_msgs/msg/particle.hpp"
@@ -354,7 +354,7 @@ protected:
   double initial_pose_yaw_;
 
   std::unique_ptr<LocalizationQualityStateMachine> localization_quality_state_machine_;
-  std::unique_ptr<LocalizationMonitor> localization_monitor_;
+  std::unique_ptr<LocalizationQualityMonitor> localization_monitor_;
 
   /*
    * @brief Get ROS parameters for node

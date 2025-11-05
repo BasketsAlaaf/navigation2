@@ -1,6 +1,6 @@
 add_library(localization_quality_monitor_lib SHARED
   localization_quality_state_machine.cpp
-  localization_monitor.cpp
+  localization_quality_monitor.cpp
 )
 
 ament_target_dependencies(localization_quality_monitor_lib

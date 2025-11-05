@@ -62,6 +62,10 @@ public:
    */
   void SetLaserPose(pf_vector_t & laser_pose);
 
+  /*
+   * @brief Get the laser pose
+   * @return laser_pose Pose of the laser
+  */
   pf_vector_t GetLaserPose();
 
 protected:
