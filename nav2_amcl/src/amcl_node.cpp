@@ -232,6 +232,31 @@ AmclNode::AmclNode(const rclcpp::NodeOptions & options)
     "freespace_downsampling", rclcpp::ParameterValue(
       false),
     "Downsample the free space used by the Pose Generator. Use it with large maps to save memory");
+
+  add_parameter(
+  "low_strict_threshold", rclcpp::ParameterValue(20.0),
+  "If average likelihood is below this threshold, consider robot localized");
+
+  add_parameter(
+  "low_soft_threshold", rclcpp::ParameterValue(25.0),
+  "If average likelihood is below this threshold, for the duration of delay_in_sec, consider robot localized");
+
+  add_parameter(
+  "high_strict_threshold", rclcpp::ParameterValue(45.0),
+  "If average likelihood is above this threshold, consider robot mislocalized");
+
+  add_parameter(
+  "high_soft_threshold", rclcpp::ParameterValue(35.0),
+  "If average likelihood is above this threshold, for the duration of delay_in_sec, consider robot mislocalized");
+
+  add_parameter(
+  "delay_in_sec", rclcpp::ParameterValue(3.0),
+  "Duration likelihood has to stay below or above soft threshold to do the state transition");
+
+  add_parameter(
+  "enable_localization_monitor", rclcpp::ParameterValue(true),
+  "Enables the localization quality monitoring system within AMCL");
+
 }
 
 AmclNode::~AmclNode()
@@ -255,6 +280,11 @@ AmclNode::on_configure(const rclcpp_lifecycle::State & /*state*/)
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor_->add_callback_group(callback_group_, get_node_base_interface());
   executor_thread_ = std::make_unique<nav2_util::NodeThread>(executor_);
+
+  if (enable_localization_monitor_){
+    localization_quality_state_machine_ = std::make_unique<LocalizationQualityStateMachine>(
+    low_strict_threshold_, low_soft_threshold_, high_strict_threshold_, high_soft_threshold_, delay_in_sec_);
+  }
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -718,7 +748,7 @@ AmclNode::laserReceived(sensor_msgs::msg::LaserScan::ConstSharedPtr laser_scan)
     std::vector<amcl_hyp_t> hyps;
     int max_weight_hyp = -1;
     if (getMaxWeightHyp(hyps, max_weight_hyps, max_weight_hyp)) {
-      publishAmclPose(laser_scan, hyps, max_weight_hyp);
+      publishAmclPose(laser_index, laser_scan, hyps, max_weight_hyp);
       calculateMaptoOdomTransform(laser_scan, hyps, max_weight_hyp);
 
       if (tf_broadcast_ == true) {
@@ -939,6 +969,7 @@ AmclNode::getMaxWeightHyp(
 
 void
 AmclNode::publishAmclPose(
+  const int & laser_index,
   const sensor_msgs::msg::LaserScan::ConstSharedPtr & laser_scan,
   const std::vector<amcl_hyp_t> & hyps, const int & max_weight_hyp)
 {
@@ -982,6 +1013,13 @@ AmclNode::publishAmclPose(
     last_published_pose_ = *p;
     first_pose_sent_ = true;
     pose_pub_->publish(std::move(p));
+    if (enable_localization_monitor_ && localization_monitor_){
+        pf_vector_t laser_pose = lasers_[laser_index]->GetLaserPose();
+        double likelihood_score = localization_monitor_->computeScore(hyps[max_weight_hyp].pf_pose_mean,
+                                                                      laser_scan, laser_pose);
+        std::string state = localization_quality_state_machine_->update(likelihood_score);
+        RCLCPP_INFO(this->get_logger(), "Current state: %s, average weight: %.5f", state.c_str(), likelihood_score);
+    }
   } else {
     RCLCPP_WARN(
       get_logger(), "AMCL covariance or pose is NaN, likely due to an invalid "
@@ -1113,6 +1151,12 @@ AmclNode::initParameters()
   get_parameter("scan_topic", scan_topic_);
   get_parameter("map_topic", map_topic_);
   get_parameter("freespace_downsampling", freespace_downsampling_);
+  get_parameter("low_strict_threshold", low_strict_threshold_);
+  get_parameter("low_soft_threshold", low_soft_threshold_);
+  get_parameter("high_strict_threshold", high_strict_threshold_);
+  get_parameter("high_soft_threshold", high_soft_threshold_);
+  get_parameter("delay_in_sec", delay_in_sec_);
+  get_parameter("enable_localization_monitor", enable_localization_monitor_);
 
   save_pose_period_ = tf2::durationFromSec(1.0 / save_pose_rate);
   transform_tolerance_ = tf2::durationFromSec(tmp_tol);
@@ -1412,6 +1456,10 @@ AmclNode::mapReceived(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   }
   handleMapMessage(*msg);
   first_map_received_ = true;
+  if (enable_localization_monitor_){
+    localization_monitor_.reset();
+    localization_monitor_ = std::make_unique<LocalizationQualityMonitor>(map_, max_beams_);
+  }
 }
 
 void

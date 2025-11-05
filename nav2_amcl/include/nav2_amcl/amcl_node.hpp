@@ -31,6 +31,8 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "message_filters/subscriber.h"
 #include "nav2_util/lifecycle_node.hpp"
+#include "nav2_amcl/localization_quality_monitor/localization_quality_monitor.hpp"
+#include "nav2_amcl/localization_quality_monitor/localization_quality_state_machine.hpp"
 #include "nav2_amcl/motion_model/motion_model.hpp"
 #include "nav2_amcl/sensors/laser/laser.hpp"
 #include "nav2_msgs/msg/particle.hpp"
@@ -324,6 +326,7 @@ protected:
    * @brief Publish robot pose in map frame from AMCL
    */
   void publishAmclPose(
+    const int & laser_index,
     const sensor_msgs::msg::LaserScan::ConstSharedPtr & laser_scan,
     const std::vector<amcl_hyp_t> & hyps, const int & max_weight_hyp);
   /*
@@ -349,6 +352,9 @@ protected:
   double initial_pose_y_;
   double initial_pose_z_;
   double initial_pose_yaw_;
+
+  std::unique_ptr<LocalizationQualityStateMachine> localization_quality_state_machine_;
+  std::unique_ptr<LocalizationQualityMonitor> localization_monitor_;
 
   /*
    * @brief Get ROS parameters for node
@@ -393,6 +399,12 @@ protected:
   std::string scan_topic_{"scan"};
   std::string map_topic_{"map"};
   bool freespace_downsampling_ = false;
+  double low_strict_threshold_;
+  double low_soft_threshold_;
+  double high_strict_threshold_;
+  double high_soft_threshold_;
+  double delay_in_sec_;
+  bool enable_localization_monitor_;
 };
 
 }  // namespace nav2_amcl
